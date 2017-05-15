@@ -571,7 +571,7 @@ sub visualStudioInstallDir
         $vsInstallDir = $ENV{'VSINSTALLDIR'};
         $vsInstallDir =~ s|[\\/]$||;
     } else {
-        $vsInstallDir = File::Spec->catdir(programFilesPath(), "Microsoft Visual Studio 14.0");
+        $vsInstallDir = File::Spec->catdir(programFilesPath(), "Microsoft Visual Studio 15.0");
     }
     chomp($vsInstallDir = `cygpath "$vsInstallDir"`) if isCygwin();
 
@@ -583,7 +583,7 @@ sub msBuildInstallDir
 {
     return $msBuildInstallDir if defined $msBuildInstallDir;
 
-    $msBuildInstallDir = File::Spec->catdir(programFilesPath(), "MSBuild", "14.0", "Bin");
+    $msBuildInstallDir = File::Spec->catdir(programFilesPath(), "Microsoft Visual Studio", "2017", "Professional", "MSBuild", "15.0", "Bin");
    
     chomp($msBuildInstallDir = `cygpath "$msBuildInstallDir"`) if isCygwin();
 
@@ -1729,7 +1729,7 @@ sub setupCygwinEnv()
             print "*************************************************************\n";
             print "Cannot find '$visualStudioPath'\n";
             print "Please execute the file 'vcvars32.bat' from\n";
-            print "'$programFilesPath\\Microsoft Visual Studio 14.0\\VC\\bin\\'\n";
+            print "'$programFilesPath\\Microsoft Visual Studio 15.0\\VC\\bin\\'\n";
             print "to setup the necessary environment variables.\n";
             print "*************************************************************\n";
             die;
@@ -2043,7 +2043,7 @@ sub generateBuildSystemFromCMakeProject
             push @args, "Ninja";
         }
     } elsif (isAnyWindows() && isWin64()) {
-        push @args, '-G "Visual Studio 14 2015 Win64"';
+        push @args, '-G "Visual Studio 15 2017 Win64" -DCMAKE_VS_PLATFORM_TOOLSET="vc151"';
     }
     # Do not show progress of generating bindings in interactive Ninja build not to leave noisy lines on tty
     push @args, '-DSHOW_BINDINGS_GENERATION_PROGRESS=1' unless ($willUseNinja && -t STDOUT);
