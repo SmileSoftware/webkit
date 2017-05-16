@@ -1,3 +1,28 @@
+2017-05-25  Isaac Devine  <isaac@devinesystems.co.nz>
+
+        Handle failures in websocket on wincairo
+
+        Add more error checks to places which can fail on windows when a
+        websocket is used. Notably when the connection is lost or when the the
+        data to send is an even number in the buffer, which requires looping to
+        send it all. (The socket only signals once that it is ready for more
+        data to be sent).
+
+        Also make sure these errors are reported, instead of silently failing.
+
+        Gracefully handle failures in websockets on wincairo
+        https://bugs.webkit.org/show_bug.cgi?id=172585
+
+        Reviewed by NOBODY (OOPS!).
+
+        No new tests as these failures happen when network connectivity is lost.
+
+        * platform/network/curl/SocketStreamHandleImplCurl.cpp:
+        (WebCore::SocketStreamHandleImpl::readData):
+        (WebCore::SocketStreamHandleImpl::sendData):
+        (WebCore::SocketStreamHandleImpl::waitForAvailableData):
+        (WebCore::SocketStreamHandleImpl::startThread):
+
 2017-05-29  Emilio Cobos Álvarez  <ecobos@igalia.com>
 
         Use the parent box style to adjust RenderStyle for alignment.

@@ -35,6 +35,7 @@
 #if USE(CURL)
 
 #include "Logging.h"
+#include "SocketStreamError.h"
 #include "SocketStreamHandleClient.h"
 #include "URL.h"
 #include <mutex>
@@ -96,32 +97,50 @@ void SocketStreamHandleImpl::platformClose()
 bool SocketStreamHandleImpl::readData(CURL* curlHandle)
 {
     ASSERT(!isMainThread());
-
-    const size_t bufferSize = 1024;
-    std::unique_ptr<char[]> data(new char[bufferSize]);
-    size_t bytesRead = 0;
-
-    CURLcode ret = curl_easy_recv(curlHandle, data.get(), bufferSize, &bytesRead);
-
-    if (ret == CURLE_OK && bytesRead >= 0) {
-        m_mutexReceive.lock();
-        m_receiveData.append(SocketData { WTFMove(data), bytesRead });
-        m_mutexReceive.unlock();
+    for (;;) {
+        const size_t bufferSize = 1024;
+        std::unique_ptr<char[]> data(new char[bufferSize]);
+        size_t bytesRead = 0;
+        
+        CURLcode ret = curl_easy_recv(curlHandle, data.get(), bufferSize, &bytesRead);
+    
+        // exactly zero is a closed connection, which when passed to didReceiveData()
+        // will close the socket.
+        if (ret == CURLE_OK && bytesRead >= 0) {
+            m_mutexReceive.lock();
+            m_receiveData.append(SocketData { WTFMove(data), bytesRead });
+            m_mutexReceive.unlock();
+        
+            ref();
+            callOnMainThread([this] {
+                didReceiveData();
+                deref();
+            });
+        
+            if (bytesRead == bufferSize) {
+                // won't get signalled in ::select() if we don't read it again here.
+                continue;
+            }
+            
+            return true;
+        }
+        
+        if (ret == CURLE_AGAIN)
+            return true;
 
         ref();
-
-        callOnMainThread([this] {
-            didReceiveData();
-            deref();
+        callOnMainThread([this, ret] {
+            // Check reference count to fix a crash.
+            // When the call is invoked on the main thread after all other references are released, the SocketStreamClient
+            // is already deleted. Accessing the SocketStreamClient in didOpenSocket() will then cause a crash.
+            if (refCount() > 1) {
+                m_client.didFailSocketStream(*this, SocketStreamError(ret));
+                deref();
+            }
         });
-
-        return true;
+        m_stopThread = true;
+        return false;
     }
-
-    if (ret == CURLE_AGAIN)
-        return true;
-
-    return false;
 }
 
 bool SocketStreamHandleImpl::sendData(CURL* curlHandle)
@@ -144,8 +163,22 @@ bool SocketStreamHandleImpl::sendData(CURL* curlHandle)
             CURLcode ret = curl_easy_send(curlHandle, sendData.data.get() + totalBytesSent, sendData.size - totalBytesSent, &bytesSent);
             if (ret == CURLE_OK)
                 totalBytesSent += bytesSent;
-            else
+            else if (ret == CURLE_AGAIN)
                 break;
+            else {
+                ref();
+                callOnMainThread([this, ret] {
+                    // Check reference count to fix a crash.
+                    // When the call is invoked on the main thread after all other references are released, the SocketStreamClient
+                    // is already deleted. Accessing the SocketStreamClient in didOpenSocket() will then cause a crash.
+                    if (refCount() > 1) {
+                        m_client.didFailSocketStream(*this, SocketStreamError(ret));
+                        deref();
+                    }
+                });
+                m_stopThread = true;
+                return false;
+            }
         }
 
         // Insert remaining data into send queue.
@@ -179,14 +212,42 @@ bool SocketStreamHandleImpl::waitForAvailableData(CURL* curlHandle, std::chrono:
         timeout.tv_usec = usec.count() % 1000000;
     }
 
-    long socket;
-    if (curl_easy_getinfo(curlHandle, CURLINFO_LASTSOCKET, &socket) != CURLE_OK)
+    curl_socket_t socket;
+    int ret = curl_easy_getinfo(curlHandle, CURLINFO_LASTSOCKET, &socket);
+    if (ret != CURLE_OK) {
+        ref();
+        callOnMainThread([this, ret] {
+            // Check reference count to fix a crash.
+            // When the call is invoked on the main thread after all other references are released,
+            // the SocketStreamClient is already deleted. Accessing the SocketStreamClient will then cause a crash.
+            if (refCount() > 1) {
+                m_client.didFailSocketStream(*this, SocketStreamError(ret));
+                deref();
+            }
+        });
         return false;
+    }
 
     fd_set fdread;
     FD_ZERO(&fdread);
     FD_SET(socket, &fdread);
     int rc = ::select(0, &fdread, nullptr, nullptr, &timeout);
+
+    if (rc == SOCKET_ERROR) {
+        ret = WSAGetLastError();
+        ref();
+        callOnMainThread([this, ret] {
+            // Check reference count to fix a crash.
+            // When the call is invoked on the main thread after all other references are released,
+            // the SocketStreamClient is already deleted. Accessing the SocketStreamClient will then cause a crash.
+            if (refCount() > 1) {
+                m_client.didFailSocketStream(*this, SocketStreamError(ret));
+                deref();
+            }
+        });
+        m_stopThread = true;
+        return false;
+    }
     return rc == 1;
 }
 
@@ -213,30 +274,41 @@ void SocketStreamHandleImpl::startThread()
             curl_easy_setopt(curlHandle, CURLOPT_PORT, m_url.port().value());
         curl_easy_setopt(curlHandle, CURLOPT_CONNECT_ONLY, 1L);
 
-        // Connect to host
-        if (curl_easy_perform(curlHandle) != CURLE_OK)
-            return;
-
         ref();
 
-        callOnMainThread([this] {
-            // Check reference count to fix a crash.
-            // When the call is invoked on the main thread after all other references are released, the SocketStreamClient
-            // is already deleted. Accessing the SocketStreamClient in didOpenSocket() will then cause a crash.
-            if (refCount() > 1)
-                didOpenSocket();
-            deref();
-        });
+        // Connect to host
+        int ret = curl_easy_perform(curlHandle);
+        if (ret != CURLE_OK) {
+            callOnMainThread([this, ret] {
+                // Check reference count to fix a crash.
+                // When the call is invoked on the main thread after all other references are released, the SocketStreamClient
+                // is already deleted. Accessing the SocketStreamClient in didOpenSocket() will then cause a crash.
+                if (refCount() > 1) {
+                    m_client.didFailSocketStream(*this, SocketStreamError(ret));
+                    deref();
+                }
+            });
+            m_stopThread = true;
+        } else {
+            callOnMainThread([this] {
+                // Check reference count to fix a crash.
+                // When the call is invoked on the main thread after all other references are released, the SocketStreamClient
+                // is already deleted. Accessing the SocketStreamClient in didOpenSocket() will then cause a crash.
+                if (refCount() > 1) {
+                    didOpenSocket();
+                    deref();
+                }
+            });
 
-        while (!m_stopThread) {
-            // Send queued data
-            sendData(curlHandle);
+            while (!m_stopThread) {
+                // Send queued data
+                sendData(curlHandle);
 
-            // Wait until socket has available data
-            if (waitForAvailableData(curlHandle, std::chrono::milliseconds(20)))
-                readData(curlHandle);
+                // Wait until socket has available data
+                if (waitForAvailableData(curlHandle, std::chrono::milliseconds(20)))
+                    readData(curlHandle);
+            }
         }
-
         curl_easy_cleanup(curlHandle);
     });
 }
