@@ -1,5 +1,20 @@
 2017-05-25  Isaac Devine  <isaac@devinesystems.co.nz>
 
+        Allow FileReader to open files multiple times
+
+        If multiple file readers open files they are prevented by default due to
+        Windows' file locking.
+
+        Allow FileReader to open multiple files for reading at the same time on wincairo
+        https://bugs.webkit.org/show_bug.cgi?id=172632
+
+        Reviewed by NOBODY (OOPS!).
+
+        * platform/win/FileSystemWin.cpp:
+        (WebCore::openFile): Use the appropriate sharing options to allow multiple opens
+
+2017-05-25  Isaac Devine  <isaac@devinesystems.co.nz>
+
         Add TLS websocket support for WinCairo
 
         Allow the websockets to validate wss:// urls, by specifying the
