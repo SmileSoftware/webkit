@@ -1192,8 +1192,10 @@ bool Editor::insertParagraphSeparatorInQuotedContent()
 
 void Editor::cut()
 {
+#if !OS(WINDOWS)
     if (tryDHTMLCut())
         return; // DHTML did the whole operation
+#endif
     if (!canCut()) {
         systemBeep();
         return;
@@ -1204,8 +1206,10 @@ void Editor::cut()
 
 void Editor::copy()
 {
+#if !OS(WINDOWS)
     if (tryDHTMLCopy())
         return; // DHTML did the whole operation
+#endif
     if (!canCopy()) {
         systemBeep();
         return;
