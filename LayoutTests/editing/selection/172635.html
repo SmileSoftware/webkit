@@ -1,0 +1,20 @@
+<head>
+  <!-- Originally from: https://bugs.chromium.org/p/chromium/issues/detail?id=383777 -->
+    <script>
+        function dom_manipulation() {
+            document.execCommand("selectAll", false, null);
+            document.execCommand("removeFormat" , true ,null);
+
+        }
+    </script>
+
+    <style>
+        * {
+            text-transform:uppercase;
+        }
+    </style>
+</head>
+<body onload='dom_manipulation()'>  
+    <data></data>
+    <embed></embed>
+    <textarea autofocus>&#329</textarea>

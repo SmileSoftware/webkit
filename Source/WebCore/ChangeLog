@@ -1,3 +1,28 @@
+2017-05-28  Isaac Devine  <isaac@devinesystems.co.nz>
+
+        Stop assertion failure and crash by clamping range
+
+        When using a content editor based on Squire, WebKit can crash under
+        certain circumstances. This is because Squire traps the delete key and
+        manually manipulates selections. This means that if you select text in
+        the middle of the contenteditable content and delete it via the delete
+        key, the assertion in the updatePositionAfterAdoptingTextReplacement
+        method is fired.
+
+        A similar issue was reported in Chromium ( https://bugs.chromium.org/p/chromium/issues/detail?id=383777 ).
+        Their solution is to simply clamp the length of the selection so that is always in a valid range. This is the same approach, but using the equivalent WebKit classes as Chromium have heavily modified this area.
+
+        Stop assertion failure & crash when editing selection in contenteditable
+        https://bugs.webkit.org/show_bug.cgi?id=172635
+
+        Reviewed by NOBODY (OOPS!).
+
+        Test: editing/selection/172635.html
+        Copied from the chrome reproduction bug.
+
+        * editing/FrameSelection.cpp:
+        (WebCore::updatePositionAfterAdoptingTextReplacement):
+
 2017-05-25  Isaac Devine  <isaac@devinesystems.co.nz>
 
         Allow FileReader to open files multiple times

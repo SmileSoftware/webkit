@@ -512,12 +512,19 @@ static void updatePositionAfterAdoptingTextReplacement(Position& position, Chara
     unsigned positionOffset = static_cast<unsigned>(position.offsetInContainerNode());
     // Replacing text can be viewed as a deletion followed by insertion.
     if (positionOffset >= offset && positionOffset <= offset + oldLength)
-        position.moveToOffset(offset);
+        positionOffset = offset;
 
     // Adjust the offset if the position is after the end of the deleted contents
     // (positionOffset > offset + oldLength) to avoid having a stale offset.
     if (positionOffset > offset + oldLength)
-        position.moveToOffset(positionOffset - oldLength + newLength);
+        positionOffset = positionOffset - oldLength + newLength;
+
+    // Basically copy the reasoning from Chrome, although this is a slightly different
+    // cause, see: https://bugs.chromium.org/p/chromium/issues/detail?id=383777
+    if (positionOffset > node->length())
+        positionOffset = node->length();
+
+    position.moveToOffset(positionOffset);
 
     ASSERT(static_cast<unsigned>(position.offsetInContainerNode()) <= node->length());
 }
