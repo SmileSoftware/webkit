@@ -42,8 +42,29 @@
 #include <wtf/Lock.h>
 #include <wtf/MainThread.h>
 #include <wtf/text/CString.h>
+#if OS(WINDOWS)
+#include "WebCoreBundleWin.h"
+#endif
 
 namespace WebCore {
+
+static CString certificatePath()
+{
+    CFBundleRef webKitBundleRef = webKitBundle();
+    if (webKitBundleRef) {
+        RetainPtr<CFURLRef> certURLRef = adoptCF(CFBundleCopyResourceURL(webKitBundleRef, CFSTR("cacert"), CFSTR("pem"), CFSTR("certificates")));
+        if (certURLRef) {
+            char path[MAX_PATH];
+            CFURLGetFileSystemRepresentation(certURLRef.get(), false, reinterpret_cast<UInt8*>(path), MAX_PATH);
+            return path;
+        }
+    }
+    char* envPath = getenv("CURL_CA_BUNDLE_PATH");
+    if (envPath)
+        return envPath;
+
+    return CString();
+}
 
 static std::unique_ptr<char[]> createCopy(const char* data, int length)
 {
@@ -55,6 +76,7 @@ static std::unique_ptr<char[]> createCopy(const char* data, int length)
 
 SocketStreamHandleImpl::SocketStreamHandleImpl(const URL& url, SocketStreamHandleClient& client)
     : SocketStreamHandle(url, client)
+    , m_certificatePath(certificatePath())
 {
     LOG(Network, "SocketStreamHandle %p new client %p", this, &m_client);
     ASSERT(isMainThread());
@@ -197,7 +219,7 @@ bool SocketStreamHandleImpl::sendData(CURL* curlHandle)
     return true;
 }
 
-bool SocketStreamHandleImpl::waitForAvailableData(CURL* curlHandle, std::chrono::milliseconds selectTimeout)
+bool SocketStreamHandleImpl::waitForAvailableData(curl_socket_t socket, std::chrono::milliseconds selectTimeout)
 {
     ASSERT(!isMainThread());
 
@@ -212,29 +234,13 @@ bool SocketStreamHandleImpl::waitForAvailableData(CURL* curlHandle, std::chrono:
         timeout.tv_usec = usec.count() % 1000000;
     }
 
-    curl_socket_t socket;
-    int ret = curl_easy_getinfo(curlHandle, CURLINFO_LASTSOCKET, &socket);
-    if (ret != CURLE_OK) {
-        ref();
-        callOnMainThread([this, ret] {
-            // Check reference count to fix a crash.
-            // When the call is invoked on the main thread after all other references are released,
-            // the SocketStreamClient is already deleted. Accessing the SocketStreamClient will then cause a crash.
-            if (refCount() > 1) {
-                m_client.didFailSocketStream(*this, SocketStreamError(ret));
-                deref();
-            }
-        });
-        return false;
-    }
-
     fd_set fdread;
     FD_ZERO(&fdread);
     FD_SET(socket, &fdread);
     int rc = ::select(0, &fdread, nullptr, nullptr, &timeout);
 
     if (rc == SOCKET_ERROR) {
-        ret = WSAGetLastError();
+        int ret = WSAGetLastError();
         ref();
         callOnMainThread([this, ret] {
             // Check reference count to fix a crash.
@@ -269,10 +275,16 @@ void SocketStreamHandleImpl::startThread()
         if (!curlHandle)
             return;
 
+        if (m_url.protocolIs("wss"))
+            curl_easy_setopt(curlHandle, CURLOPT_DEFAULT_PROTOCOL, "https");
+
         curl_easy_setopt(curlHandle, CURLOPT_URL, m_url.host().utf8().data());
         if (m_url.port())
             curl_easy_setopt(curlHandle, CURLOPT_PORT, m_url.port().value());
         curl_easy_setopt(curlHandle, CURLOPT_CONNECT_ONLY, 1L);
+
+        if (!m_certificatePath.isNull())
+            curl_easy_setopt(curlHandle, CURLOPT_CAINFO, m_certificatePath.data());
 
         ref();
 
@@ -300,12 +312,28 @@ void SocketStreamHandleImpl::startThread()
                 }
             });
 
+            curl_socket_t socket;
+            int ret = curl_easy_getinfo(curlHandle, CURLINFO_ACTIVESOCKET, &socket);
+            if (ret != CURLE_OK) {
+                ref();
+                callOnMainThread([this, ret] {
+                    // Check reference count to fix a crash.
+                    // When the call is invoked on the main thread after all other references are released,
+                    // the SocketStreamClient is already deleted. Accessing the SocketStreamClient will then cause a crash.
+                    if (refCount() > 1) {
+                        m_client.didFailSocketStream(*this, SocketStreamError(ret));
+                        deref();
+                    }
+                });
+                m_stopThread = true;
+            }
+
             while (!m_stopThread) {
                 // Send queued data
                 sendData(curlHandle);
 
                 // Wait until socket has available data
-                if (waitForAvailableData(curlHandle, std::chrono::milliseconds(20)))
+                if (waitForAvailableData(socket, std::chrono::milliseconds(20)))
                     readData(curlHandle);
             }
         }

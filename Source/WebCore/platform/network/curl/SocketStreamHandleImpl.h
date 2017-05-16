@@ -66,7 +66,7 @@ private:
 
     bool readData(CURL*);
     bool sendData(CURL*);
-    bool waitForAvailableData(CURL*, std::chrono::milliseconds selectTimeout);
+    bool waitForAvailableData(curl_socket_t, std::chrono::milliseconds selectTimeout);
 
     void startThread();
     void stopThread();
@@ -98,6 +98,7 @@ private:
     Lock m_mutexReceive;
     Deque<SocketData> m_sendData;
     Deque<SocketData> m_receiveData;
+    const CString m_certificatePath;
 
     StreamBuffer<char, 1024 * 1024> m_buffer;
     static const unsigned maxBufferSize = 100 * 1024 * 1024;

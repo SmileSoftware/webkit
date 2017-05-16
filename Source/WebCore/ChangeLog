@@ -1,5 +1,28 @@
 2017-05-25  Isaac Devine  <isaac@devinesystems.co.nz>
 
+        Add TLS websocket support for WinCairo
+
+        Allow the websockets to validate wss:// urls, by specifying the
+        certificate path that CURL should use.
+
+        As part of this, only request the active once in order to improve
+        performance. Otherwise wss sockets are almost unusable because the ssl
+        data would be checked by curl every idle loop.
+
+        Add support for wss:// websockets to wincairo
+        https://bugs.webkit.org/show_bug.cgi?id=172630
+
+        Reviewed by NOBODY (OOPS!).
+
+        * platform/network/curl/SocketStreamHandleImpl.h:
+        * platform/network/curl/SocketStreamHandleImplCurl.cpp:
+        (WebCore::certificatePath): Used to determine root certificate store
+        (WebCore::SocketStreamHandleImpl::SocketStreamHandleImpl):
+        (WebCore::SocketStreamHandleImpl::waitForAvailableData):
+        (WebCore::SocketStreamHandleImpl::startThread):
+
+2017-05-25  Isaac Devine  <isaac@devinesystems.co.nz>
+
         Handle failures in websocket on wincairo
 
         Add more error checks to places which can fail on windows when a
