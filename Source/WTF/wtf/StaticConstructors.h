@@ -45,8 +45,6 @@
 //   go into our own section, and the CRT won't call them. Eventually it would
 //   be nice if the section was discarded, because we don't want the pointers.
 //   See: http://msdn.microsoft.com/en-us/library/7977wcck(VS.80).aspx
-#pragma warning(disable:4075)
-#pragma init_seg(".unwantedstaticinits")
 #endif
 
 #ifndef SKIP_STATIC_CONSTRUCTORS_ON_GCC

@@ -596,14 +596,14 @@ public:
         //       StringImpl::hash() only sets a new hash iff !hasHash().
         //       Additionally, StringImpl::setHash() asserts hasHash() and !isStatic().
 
-        template<unsigned charactersCount>
+        template<size_t charactersCount>
         constexpr StaticStringImpl(const char (&characters)[charactersCount], StringKind stringKind = StringNormal)
             : StringImplShape(s_refCountFlagIsStaticString, charactersCount - 1, characters,
                 s_hashFlag8BitBuffer | s_hashFlagDidReportCost | stringKind | BufferInternal | (StringHasher::computeLiteralHashAndMaskTop8Bits(characters) << s_flagCount), ConstructWithConstExpr)
         {
         }
 
-        template<unsigned charactersCount>
+        template<size_t charactersCount>
         constexpr StaticStringImpl(const char16_t (&characters)[charactersCount], StringKind stringKind = StringNormal)
             : StringImplShape(s_refCountFlagIsStaticString, charactersCount - 1, characters,
                 s_hashFlagDidReportCost | stringKind | BufferInternal | (StringHasher::computeLiteralHashAndMaskTop8Bits(characters) << s_flagCount), ConstructWithConstExpr)
@@ -614,6 +614,14 @@ public:
         {
             return *reinterpret_cast<StringImpl*>(this);
         }
+
+#ifndef NDEBUG
+        void assertHashIsCorrect()
+        {
+            ASSERT(m_hashAndFlags != 0);
+
+        }
+#endif
     };
 
     WTF_EXPORTDATA static StaticStringImpl s_atomicEmptyString;

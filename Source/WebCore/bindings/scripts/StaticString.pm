@@ -67,7 +67,7 @@ sub GenerateStringAsserts($)
     push(@result, "#ifndef NDEBUG\n");
 
     for my $name (sort keys %strings) {
-        push(@result, "    reinterpret_cast<StringImpl*>(&${name}Data)->assertHashIsCorrect();\n");
+        push(@result, "    ${name}Data.assertHashIsCorrect();\n");
     }
 
     push(@result, "#endif // NDEBUG\n");
