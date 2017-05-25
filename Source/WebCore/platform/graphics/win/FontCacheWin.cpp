@@ -355,7 +355,10 @@ Ref<Font> FontCache::lastResortFallbackFont(const FontDescription& fontDescripti
         AtomicString("Microsoft Sans Serif", AtomicString::ConstructFromLiteral),
         AtomicString("Tahoma", AtomicString::ConstructFromLiteral),
         AtomicString("Lucida Sans Unicode", AtomicString::ConstructFromLiteral),
-        AtomicString("Arial", AtomicString::ConstructFromLiteral)
+        AtomicString("Arial", AtomicString::ConstructFromLiteral),
+        AtomicString("Segoe UI", AtomicString::ConstructFromLiteral),
+        AtomicString("Segoe UI Emoji", AtomicString::ConstructFromLiteral),
+        AtomicString("Segoe UI Symbol", AtomicString::ConstructFromLiteral)
     };
     RefPtr<Font> simpleFont;
     for (size_t i = 0; i < WTF_ARRAY_LENGTH(fallbackFonts); ++i) {
