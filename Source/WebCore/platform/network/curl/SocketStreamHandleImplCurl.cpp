@@ -44,6 +44,7 @@
 #include <wtf/text/CString.h>
 #if OS(WINDOWS)
 #include "WebCoreBundleWin.h"
+#include "ProxyInformation.h"
 #endif
 
 namespace WebCore {
@@ -285,6 +286,15 @@ void SocketStreamHandleImpl::startThread()
 
         if (!m_certificatePath.isNull())
             curl_easy_setopt(curlHandle, CURLOPT_CAINFO, m_certificatePath.data());
+
+        ProxyInformation info;
+
+        auto proxies = info.proxiesFor(m_url);
+
+        if (!proxies.empty()) {
+            curl_easy_setopt(curlHandle, CURLOPT_PROXY, proxies.front().utf8().data());
+            curl_easy_setopt(curlHandle, CURLOPT_PROXYAUTH, CURLAUTH_NEGOTIATE);
+        }
 
         ref();
 

@@ -62,6 +62,7 @@
 #include "WebCoreBundleWin.h"
 #include <shlobj.h>
 #include <shlwapi.h>
+#include "ProxyInformation.h"
 #else
 #include <sys/param.h>
 #define MAX_PATH MAXPATHLEN
@@ -1201,11 +1202,12 @@ void ResourceHandleManager::initializeHandle(ResourceHandle* job)
 
     applyAuthenticationToRequest(job, job->firstRequest());
 
-    // Set proxy options if we have them.
-    if (m_proxy.length()) {
-        curl_easy_setopt(d->m_handle, CURLOPT_PROXY, m_proxy.utf8().data());
-        curl_easy_setopt(d->m_handle, CURLOPT_PROXYTYPE, m_proxyType);
+    auto proxies = m_proxyInformation.proxiesFor(url);
+    if (!proxies.empty()) {
+        curl_easy_setopt(d->m_handle, CURLOPT_PROXY, proxies.front().utf8().data());
+        curl_easy_setopt(d->m_handle, CURLOPT_PROXYAUTH, CURLAUTH_NEGOTIATE);
     }
+
 }
 
 void ResourceHandleManager::initCookieSession()

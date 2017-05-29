@@ -35,6 +35,7 @@
 #if PLATFORM(WIN)
 #include <winsock2.h>
 #include <windows.h>
+#include "ProxyInformation.h"
 #endif
 
 #include <curl/curl.h>
@@ -92,6 +93,7 @@ private:
     const CString m_certificatePath;
     int m_runningJobs;
     
+	ProxyInformation m_proxyInformation;
     String m_proxy;
     ProxyType m_proxyType;
 
