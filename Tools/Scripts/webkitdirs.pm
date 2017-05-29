@@ -2044,6 +2044,8 @@ sub generateBuildSystemFromCMakeProject
         }
     } elsif (isAnyWindows() && isWin64()) {
         push @args, '-G "Visual Studio 15 2017 Win64" -DCMAKE_VS_PLATFORM_TOOLSET="vc151"';
+    } elsif (isAnyWindows()) {
+        push @args, '-G "Visual Studio 15 2017" -DCMAKE_VS_PLATFORM_TOOLSET="vc151"';
     }
     # Do not show progress of generating bindings in interactive Ninja build not to leave noisy lines on tty
     push @args, '-DSHOW_BINDINGS_GENERATION_PROGRESS=1' unless ($willUseNinja && -t STDOUT);
